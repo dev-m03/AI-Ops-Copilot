@@ -1,6 +1,6 @@
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials, APIKeyHeader
-from app.supabase.client import supabase
+from supabase.client import supabase
 
 # -------- JWT (Human auth) --------
 jwt_scheme = HTTPBearer(auto_error=True)
