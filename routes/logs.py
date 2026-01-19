@@ -1,7 +1,7 @@
 """Log ingestion route."""
 from fastapi import APIRouter, HTTPException
-from app.schemas.logs import LogCreate, LogResponse
-from app.services.log_service import ingest_log
+from schemas.logs import LogCreate, LogResponse
+from services.log_service import ingest_log
 
 router = APIRouter(prefix="/logs", tags=["logs"])
 
