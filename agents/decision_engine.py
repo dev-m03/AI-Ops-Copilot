@@ -1,6 +1,6 @@
 """Agent decision engine."""
-from app.agents.policies import decide_action
-from app.agents.action_executor import execute_action
+from agents.policies import decide_action
+from agents.action_executor import execute_action
 
 def run_agent(incident: dict, analysis: dict) -> dict:
     """Run decision engine on incident analysis."""
