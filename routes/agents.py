@@ -1,10 +1,10 @@
 """Agent management routes."""
 
 from fastapi import APIRouter, Depends, HTTPException
-from app.supabase.auth import get_current_user
-from app.supabase.client import supabase
-from app.services.rca_service import analyze_incident
-from app.agents.decision_engine import run_agent
+from supabase.auth import get_current_user
+from supabase.client import supabase
+from services.rca_service import analyze_incident
+from agents.decision_engine import run_agent
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
