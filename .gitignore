@@ -1,0 +1,10 @@
+.env
+env/
+venv/
+.vscode/
+__pycache__/
+*.pyc
+*.pem
+*.key
+credentials.json
+secrets.yaml
