@@ -5,7 +5,7 @@ import os
 from datetime import datetime
 
 from google import genai
-from app.supabase.client import supabase
+from supabase.client import supabase
 
 # Create Gemini client (NEW SDK)
 client = genai.Client(
