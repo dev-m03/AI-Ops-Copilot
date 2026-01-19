@@ -1,5 +1,5 @@
 """Safe action executor for incidents."""
-from app.services.notification_service import send_notification
+from services.notification_service import send_notification
 
 def execute_action(action: str, incident: dict, analysis: dict) -> bool:
     """Execute approved action safely."""
