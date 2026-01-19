@@ -1,7 +1,7 @@
 """Log ingestion and incident detection service."""
 from datetime import datetime, timedelta
-from app.supabase.client import supabase
-from app.schemas.logs import LogCreate, LogResponse
+from supabase.client import supabase
+from schemas.logs import LogCreate, LogResponse
 
 ERROR_THRESHOLD = 5
 
