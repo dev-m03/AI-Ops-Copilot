@@ -1,8 +1,8 @@
 """Project management service."""
 from datetime import datetime
-from app.supabase.client import supabase
-from app.utils.api_key import generate_api_key
-from app.schemas.projects import ProjectCreate, ProjectResponse
+from supabase.client import supabase
+from utils.api_key import generate_api_key
+from schemas.projects import ProjectCreate, ProjectResponse
 
 
 def create_project(user_id: str, data: ProjectCreate) -> ProjectResponse:
