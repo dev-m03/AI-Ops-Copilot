@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
-from asupabase.auth import get_current_user
-from supabase.client import supabase
+from db.auth import get_current_user
+from db.client import supabase
 
 router = APIRouter(prefix="/incidents", tags=["incidents"])
 

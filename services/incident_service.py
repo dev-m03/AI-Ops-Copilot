@@ -1,4 +1,4 @@
-from supabase.client import supabase
+from db.client import supabase
 
 def get_incident(user_id: str, incident_id: str):
     # 1. Fetch incident

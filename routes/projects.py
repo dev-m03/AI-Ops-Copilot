@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from schemas.projects import ProjectCreate, ProjectResponse
 from services.project_service import create_project, list_projects, get_project
-from supabase.auth import get_current_user
+from db.auth import get_current_user
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 

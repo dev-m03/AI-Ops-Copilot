@@ -1,51 +1,42 @@
-"""Root cause analysis service using Gemini (google-genai)."""
-
-import json
-import os
-from datetime import datetime
-
-from google import genai
-from supabase.client import supabase
-
-# Create Gemini client (NEW SDK)
-client = genai.Client(
-    api_key=os.getenv("AI_PROVIDER_KEY")
-)
-
-MODEL_NAME = "gemini-1.5-flash"
-
-SYSTEM_PROMPT = """
-You are a senior Site Reliability Engineer.
-
-Analyze the incident context and return STRICT JSON with this schema:
-
-{
-  "root_cause": string,
-  "confidence": number between 0 and 1,
-  "severity": "low" | "medium" | "high",
-  "suggested_fixes": string[],
-  "needs_human": boolean
-}
-
-Return JSON only.
 """
+Root Cause Analysis service.
+
+This service:
+- Calls the GenAI microservice
+- Stores the analysis result in Supabase
+"""
+
+from datetime import datetime
+import os
+import requests
+
+from db.client import supabase
+
+GENAI_URL = os.getenv(
+    "GENAI_URL",
+    "http://aiops-genai:8001/analyze"
+)
 
 
 def analyze_incident(incident_id: str, context: str) -> dict:
-    """Analyze incident using Gemini and store results."""
-
-    prompt = f"{SYSTEM_PROMPT}\n\nINCIDENT CONTEXT:\n{context}"
+    """
+    Analyze an incident using the GenAI service and persist the result.
+    """
 
     try:
-        response = client.models.generate_content(
-            model=MODEL_NAME,
-            contents=prompt,
+        response = requests.post(
+            GENAI_URL,
+            json={
+                "incident_id": incident_id,
+                "context": context,
+            },
+            timeout=30,
         )
-
-        analysis = json.loads(response.text)
+        response.raise_for_status()
+        analysis = response.json()
 
     except Exception:
-        # Safe fallback – never crash the pipeline
+        # Absolute safety net – API must NEVER crash
         analysis = {
             "root_cause": "Unable to determine root cause reliably",
             "confidence": 0.0,
@@ -54,15 +45,17 @@ def analyze_incident(incident_id: str, context: str) -> dict:
             "needs_human": True,
         }
 
-    # Persist analysis
-    supabase.table("incident_analysis").insert({
-        "incident_id": incident_id,
-        "root_cause": analysis["root_cause"],
-        "confidence": analysis["confidence"],
-        "severity": analysis["severity"],
-        "suggested_fixes": analysis["suggested_fixes"],
-        "needs_human": analysis["needs_human"],
-        "created_at": datetime.utcnow().isoformat(),
-    }).execute()
+    # Persist analysis in Supabase
+    supabase.table("incident_analysis").insert(
+        {
+            "incident_id": incident_id,
+            "root_cause": analysis["root_cause"],
+            "confidence": analysis["confidence"],
+            "severity": analysis["severity"],
+            "suggested_fixes": analysis["suggested_fixes"],
+            "needs_human": analysis["needs_human"],
+            "created_at": datetime.utcnow().isoformat(),
+        }
+    ).execute()
 
     return analysis

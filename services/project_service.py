@@ -1,6 +1,6 @@
 """Project management service."""
 from datetime import datetime
-from supabase.client import supabase
+from db.client import supabase
 from utils.api_key import generate_api_key
 from schemas.projects import ProjectCreate, ProjectResponse
 

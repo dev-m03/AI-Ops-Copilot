@@ -1,6 +1,6 @@
 """Log ingestion and incident detection service."""
 from datetime import datetime, timedelta
-from supabase.client import supabase
+from db.client import supabase
 from schemas.logs import LogCreate, LogResponse
 
 ERROR_THRESHOLD = 5
