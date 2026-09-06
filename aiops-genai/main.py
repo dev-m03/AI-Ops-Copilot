@@ -14,19 +14,16 @@ import json
 import os
 from typing import Literal
 
+import google.generativeai as genai
 from dotenv import load_dotenv
 from fastapi import FastAPI
-from google import genai
 from pydantic import BaseModel, ValidationError
 
 load_dotenv()
 
-app = FastAPI(title="AI Ops GenAI Service")
+genai.configure(api_key=os.getenv("AI_PROVIDER_KEY"))
 
-client = genai.Client(
-    api_key=os.getenv("AI_PROVIDER_KEY"),
-    http_options={"api_version": "v1"},
-)
+app = FastAPI(title="AI Ops GenAI Service")
 
 # ---------------------------------------------------------------------------
 # Shared contract models
@@ -73,7 +70,7 @@ Analyze the following incident context and respond with **only** a JSON object
 
 {{
   "root_cause": "<concise one-sentence root cause>",
-  "confidence": <float 0.0–1.0>,
+  "confidence": <float 0.0-1.0>,
   "severity": "<low|medium|high>",
   "suggested_fixes": ["<fix 1>", "<fix 2>"],
   "needs_human": <true|false>
@@ -99,13 +96,11 @@ def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
     print(f"[genai] calling Gemini for incident: {request.incident_id}", flush=True)
 
     try:
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=prompt,
-        )
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        response = model.generate_content(prompt)
 
         raw_text = response.text.strip()
-        print(f"[genai] Gemini raw response: {raw_text[:200]}", flush=True)
+        print(f"[genai] Gemini raw response: {raw_text[:300]}", flush=True)
 
         # Strip accidental markdown code fences if Gemini adds them
         if raw_text.startswith("```"):
@@ -119,11 +114,9 @@ def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
         return AnalyzeResponse(**parsed)
 
     except (json.JSONDecodeError, ValidationError, KeyError) as e:
-        # Gemini returned something we can't parse — fail safe
         print(f"[genai] Parse error: {type(e).__name__}: {e}", flush=True)
         return _fallback(request.incident_id)
 
     except Exception as e:
-        # Network error, quota exceeded, etc. — fail safe
         print(f"[genai] Gemini call failed: {type(e).__name__}: {e}", flush=True)
         return _fallback(request.incident_id)
