@@ -89,36 +89,49 @@ Incident context:
 def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
     """
     Analyze an incident and return a structured RCA result.
-    Falls back safely if Gemini is unavailable or returns unexpected output.
+    Tries multiple models in order; falls back safely if all fail.
     """
     prompt = PROMPT_TEMPLATE.format(context=request.context)
 
-    print(f"[genai] calling Gemini for incident: {request.incident_id}", flush=True)
+    # Try models in order — move to next if one is 503/404
+    models_to_try = [
+        "gemini-flash-lite-latest",
+        "gemini-flash-latest",
+        "gemini-pro-latest",
+    ]
 
-    try:
-        response = client.models.generate_content(
-            model="gemini-flash-latest",
-            contents=prompt,
-        )
+    for model_name in models_to_try:
+        print(f"[genai] trying model={model_name} for incident={request.incident_id}", flush=True)
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+            )
 
-        raw_text = response.text.strip()
-        print(f"[genai] Gemini raw response: {raw_text[:300]}", flush=True)
+            raw_text = response.text.strip()
+            print(f"[genai] {model_name} responded: {raw_text[:300]}", flush=True)
 
-        # Strip accidental markdown code fences if Gemini adds them
-        if raw_text.startswith("```"):
-            lines = raw_text.splitlines()
-            raw_text = "\n".join(
-                line for line in lines
-                if not line.startswith("```")
-            ).strip()
+            # Strip accidental markdown code fences if Gemini adds them
+            if raw_text.startswith("```"):
+                lines = raw_text.splitlines()
+                raw_text = "\n".join(
+                    line for line in lines
+                    if not line.startswith("```")
+                ).strip()
 
-        parsed = json.loads(raw_text)
-        return AnalyzeResponse(**parsed)
+            parsed = json.loads(raw_text)
+            return AnalyzeResponse(**parsed)
 
-    except (json.JSONDecodeError, ValidationError, KeyError) as e:
-        print(f"[genai] Parse error: {type(e).__name__}: {e}", flush=True)
-        return _fallback(request.incident_id)
+        except (json.JSONDecodeError, ValidationError, KeyError) as e:
+            print(f"[genai] {model_name} parse error: {type(e).__name__}: {e}", flush=True)
+            return _fallback(request.incident_id)
 
-    except Exception as e:
-        print(f"[genai] Gemini call failed: {type(e).__name__}: {e}", flush=True)
-        return _fallback(request.incident_id)
+        except Exception as e:
+            err = str(e)
+            print(f"[genai] {model_name} failed: {type(e).__name__}: {err[:200]}", flush=True)
+            if any(code in err for code in ("503", "429", "404", "UNAVAILABLE", "NOT_FOUND")):
+                continue
+            return _fallback(request.incident_id)
+
+    print("[genai] all models failed — returning fallback", flush=True)
+    return _fallback(request.incident_id)
