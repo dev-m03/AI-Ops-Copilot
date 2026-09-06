@@ -93,6 +93,8 @@ def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
     """
     prompt = PROMPT_TEMPLATE.format(context=request.context)
 
+    print(f"[genai] calling Gemini for incident: {request.incident_id}", flush=True)
+
     try:
         response = client.models.generate_content(
             model="gemini-1.5-flash",
@@ -100,6 +102,7 @@ def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
         )
 
         raw_text = response.text.strip()
+        print(f"[genai] Gemini raw response: {raw_text[:200]}", flush=True)
 
         # Strip accidental markdown code fences if Gemini adds them
         if raw_text.startswith("```"):
@@ -112,10 +115,12 @@ def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
         parsed = json.loads(raw_text)
         return AnalyzeResponse(**parsed)
 
-    except (json.JSONDecodeError, ValidationError, KeyError):
+    except (json.JSONDecodeError, ValidationError, KeyError) as e:
         # Gemini returned something we can't parse — fail safe
+        print(f"[genai] Parse error: {type(e).__name__}: {e}", flush=True)
         return _fallback(request.incident_id)
 
-    except Exception:
+    except Exception as e:
         # Network error, quota exceeded, etc. — fail safe
+        print(f"[genai] Gemini call failed: {type(e).__name__}: {e}", flush=True)
         return _fallback(request.incident_id)
