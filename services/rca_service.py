@@ -73,13 +73,14 @@ def analyze_incident(incident_id: str, context: str) -> dict:
         # Validate the response shape before trusting any fields
         analysis = RCAAnalysisResult(**response.json())
 
-    except ValidationError:
+    except ValidationError as e:
         # GenAI service returned an unexpected shape — use fallback
-        # (the fallback is already assigned above; nothing extra needed here)
+        print(f"[rca_service] ValidationError from genai response: {e}", flush=True)
         pass
 
-    except Exception:
+    except Exception as e:
         # Network error, timeout, non-2xx status, etc. — use fallback
+        print(f"[rca_service] GenAI call failed: {type(e).__name__}: {e}", flush=True)
         pass
 
     # Persist analysis in Supabase
