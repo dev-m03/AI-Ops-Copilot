@@ -23,7 +23,10 @@ load_dotenv()
 
 app = FastAPI(title="AI Ops GenAI Service")
 
-client = genai.Client(api_key=os.getenv("AI_PROVIDER_KEY"))
+client = genai.Client(
+    api_key=os.getenv("AI_PROVIDER_KEY"),
+    http_options={"api_version": "v1"},
+)
 
 # ---------------------------------------------------------------------------
 # Shared contract models
@@ -97,7 +100,7 @@ def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
 
     try:
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-1.5-flash",
             contents=prompt,
         )
 
