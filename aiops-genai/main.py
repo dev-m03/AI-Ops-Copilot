@@ -14,14 +14,14 @@ import json
 import os
 from typing import Literal
 
-import google.generativeai as genai
 from dotenv import load_dotenv
 from fastapi import FastAPI
+from google import genai
 from pydantic import BaseModel, ValidationError
 
 load_dotenv()
 
-genai.configure(api_key=os.getenv("AI_PROVIDER_KEY"))
+client = genai.Client(api_key=os.getenv("AI_PROVIDER_KEY"))
 
 app = FastAPI(title="AI Ops GenAI Service")
 
@@ -96,8 +96,10 @@ def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
     print(f"[genai] calling Gemini for incident: {request.incident_id}", flush=True)
 
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+        )
 
         raw_text = response.text.strip()
         print(f"[genai] Gemini raw response: {raw_text[:300]}", flush=True)
