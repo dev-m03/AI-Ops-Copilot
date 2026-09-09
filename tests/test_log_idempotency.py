@@ -35,11 +35,13 @@ BASE_LOG = LogCreate(
     message="Connection refused",
 )
 
-
-def _project_mock():
-    m = MagicMock()
-    m.data = {"id": PROJECT_ID, "user_id": "user-A"}
-    return m
+# Default project row — NULL overrides mean global defaults apply
+_PROJECT_ROW = {
+    "id": PROJECT_ID,
+    "user_id": "user-A",
+    "error_threshold": None,
+    "error_window_minutes": None,
+}
 
 
 def _insert_mock(log_id: str):
@@ -50,9 +52,9 @@ def _insert_mock(log_id: str):
 
 def _build_supabase(
     project_data,
-    dedup_log_data,    # result of _find_duplicate_log query
-    error_count_data,  # list of log rows for threshold check
-    open_incident_data,# existing open incident (or empty list)
+    dedup_log_data,     # result of _find_duplicate_log query
+    error_count_data,   # list of log rows for threshold check
+    open_incident_data, # existing open incident (or empty list)
     new_incident_id="incident-new",
     new_log_id="log-new",
 ):
@@ -63,6 +65,7 @@ def _build_supabase(
     sb = MagicMock()
 
     def _chain(data):
+        """Return a fluent mock chain whose .execute() returns `data`."""
         c = MagicMock()
         c.select.return_value = c
         c.insert.return_value = c
@@ -71,7 +74,7 @@ def _build_supabase(
         c.gte.return_value = c
         c.limit.return_value = c
         c.single.return_value = c
-        c.execute.return_value = MagicMock(data=data)
+        c.execute.return_value = MagicMock(data=data)   # ← single assignment, no override
         return c
 
     insert_chain = MagicMock()
@@ -87,35 +90,23 @@ def _build_supabase(
     incident_update_chain.eq.return_value = incident_update_chain
     incident_update_chain.execute.return_value = MagicMock(data=[])
 
-    tables = {
-        # order matters — side_effect list must match call order
-    }
+    call_log: list[str] = []
 
-    call_log = []
-
-    def table_router(name):
+    def table_router(name: str):
         call_log.append(name)
         n = len(call_log)
-        # call 1: projects (project lookup)
-        if n == 1:
+        if n == 1:                              # projects lookup
             return _chain(project_data)
-        # call 2: logs (dedup check)
-        if n == 2:
+        if n == 2:                              # dedup check (logs)
             return _chain(dedup_log_data)
-        # call 3: logs (insert) — only if dedup_log_data is empty
-        if n == 3 and name == "logs":
+        if n == 3 and name == "logs":           # log insert
             return insert_chain
-        # call 4: logs (error count for threshold)
-        if n == 4 and name == "logs":
+        if n == 4 and name == "logs":           # error count
             return _chain(error_count_data)
-        # call 5: incidents (open incident check)
-        if n == 5 and name == "incidents":
+        if n == 5 and name == "incidents":      # open incident check
             return _chain(open_incident_data)
-        # call 6: incidents (insert new) or update
-        if n == 6 and name == "incidents":
-            if open_incident_data:
-                return incident_update_chain
-            return incident_insert_chain
+        if n == 6 and name == "incidents":      # create or update incident
+            return incident_update_chain if open_incident_data else incident_insert_chain
         return MagicMock()
 
     sb.table.side_effect = table_router
@@ -127,7 +118,7 @@ def _build_supabase(
 def test_first_ingestion_inserts_row():
     """First call → new log row inserted, deduplicated=False."""
     sb = _build_supabase(
-        project_data={"id": PROJECT_ID, "user_id": "user-A"},
+        project_data=_PROJECT_ROW,
         dedup_log_data=[],          # no duplicate
         error_count_data=[],        # below threshold
         open_incident_data=[],
@@ -145,7 +136,7 @@ def test_duplicate_retry_is_suppressed():
     """Second identical call within window → returns existing log, no insert."""
     existing_log = {"id": "log-existing", "incident_id": None}
     sb = _build_supabase(
-        project_data={"id": PROJECT_ID, "user_id": "user-A"},
+        project_data=_PROJECT_ROW,
         dedup_log_data=[existing_log],  # duplicate found
         error_count_data=[],
         open_incident_data=[],
@@ -164,7 +155,7 @@ def test_caller_supplied_idempotency_key_used():
     existing_log = {"id": "log-from-key", "incident_id": None}
 
     sb = _build_supabase(
-        project_data={"id": PROJECT_ID, "user_id": "user-A"},
+        project_data=_PROJECT_ROW,
         dedup_log_data=[existing_log],
         error_count_data=[],
         open_incident_data=[],
@@ -181,7 +172,7 @@ def test_incident_created_on_threshold():
     error_rows = [{"id": f"log-{i}"} for i in range(svc.ERROR_THRESHOLD)]
 
     sb = _build_supabase(
-        project_data={"id": PROJECT_ID, "user_id": "user-A"},
+        project_data=_PROJECT_ROW,
         dedup_log_data=[],
         error_count_data=error_rows,     # threshold crossed
         open_incident_data=[],           # no existing open incident
@@ -201,11 +192,11 @@ def test_no_duplicate_incident_when_open_exists():
     When threshold is crossed but an open incident already exists for
     (project_id, service) → no new incident is created.
     """
-    error_rows = [{"id": f"log-{i}"} for i in range(svc.ERROR_THRESHOLD)]
+    error_rows   = [{"id": f"log-{i}"} for i in range(svc.ERROR_THRESHOLD)]
     open_incident = [{"id": "incident-existing", "occurrence_count": 3}]
 
     sb = _build_supabase(
-        project_data={"id": PROJECT_ID, "user_id": "user-A"},
+        project_data=_PROJECT_ROW,
         dedup_log_data=[],
         error_count_data=error_rows,
         open_incident_data=open_incident,   # already open
