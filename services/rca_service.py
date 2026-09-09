@@ -8,6 +8,7 @@ This service:
 - Falls back safely if the GenAI service is unreachable or returns bad data
 """
 
+import logging
 import os
 from datetime import datetime
 from typing import Literal
@@ -16,6 +17,8 @@ import requests
 from pydantic import BaseModel, ValidationError
 
 from db.client import supabase
+
+logger = logging.getLogger(__name__)
 
 GENAI_URL = os.getenv(
     "GENAI_URL",
@@ -73,27 +76,35 @@ def analyze_incident(incident_id: str, context: str) -> dict:
         # Validate the response shape before trusting any fields
         analysis = RCAAnalysisResult(**response.json())
 
-    except ValidationError as e:
-        # GenAI service returned an unexpected shape — use fallback
-        print(f"[rca_service] ValidationError from genai response: {e}", flush=True)
-        pass
+    except ValidationError:
+        logger.exception(
+            "GenAI response failed schema validation — using fallback",
+            extra={"context": {"incident_id": incident_id, "genai_url": GENAI_URL}},
+        )
 
-    except Exception as e:
-        # Network error, timeout, non-2xx status, etc. — use fallback
-        print(f"[rca_service] GenAI call failed: {type(e).__name__}: {e}", flush=True)
-        pass
+    except Exception:
+        logger.exception(
+            "GenAI HTTP call failed — using fallback",
+            extra={"context": {"incident_id": incident_id, "genai_url": GENAI_URL}},
+        )
 
     # Persist analysis in Supabase
-    supabase.table("incident_analysis").insert(
-        {
-            "incident_id": incident_id,
-            "root_cause": analysis.root_cause,
-            "confidence": analysis.confidence,
-            "severity": analysis.severity,
-            "suggested_fixes": analysis.suggested_fixes,
-            "needs_human": analysis.needs_human,
-            "created_at": datetime.utcnow().isoformat(),
-        }
-    ).execute()
+    try:
+        supabase.table("incident_analysis").insert(
+            {
+                "incident_id": incident_id,
+                "root_cause": analysis.root_cause,
+                "confidence": analysis.confidence,
+                "severity": analysis.severity,
+                "suggested_fixes": analysis.suggested_fixes,
+                "needs_human": analysis.needs_human,
+                "created_at": datetime.utcnow().isoformat(),
+            }
+        ).execute()
+    except Exception:
+        logger.exception(
+            "Failed to persist RCA analysis to Supabase",
+            extra={"context": {"incident_id": incident_id}},
+        )
 
     return analysis.model_dump()
