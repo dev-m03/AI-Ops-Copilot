@@ -16,7 +16,10 @@ def analyze_and_decide(
 ):
     """
     Run RCA analysis and agent decision on an incident.
-    MVP-safe version (no redundant ownership check).
+
+    Returns 404 (not 403) when the incident doesn't exist OR doesn't belong
+    to the requesting user — this avoids leaking the existence of other
+    users' incidents (IDOR prevention).
     """
 
     # 1️⃣ Fetch incident
@@ -34,17 +37,32 @@ def analyze_and_decide(
 
     incident = incident_res.data
 
-    # 2️⃣ Build context
+    # 2️⃣ Ownership check — confirm the incident's project belongs to this user
+    project_res = (
+        supabase
+        .table("projects")
+        .select("id")
+        .eq("id", incident["project_id"])
+        .eq("user_id", user_id)        # ownership gate
+        .single()
+        .execute()
+    )
+
+    if not project_res.data:
+        # Return 404 intentionally — 403 would leak that the incident exists
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    # 3️⃣ Build context
     context = (
         f"Service: {incident['service']}\n"
         f"Summary: {incident['summary']}\n"
         f"Severity: {incident['severity']}"
     )
 
-    # 3️⃣ Run RCA analysis
+    # 4️⃣ Run RCA analysis
     analysis = analyze_incident(incident_id, context)
 
-    # 4️⃣ Run agent decision engine
+    # 5️⃣ Run agent decision engine
     decision = run_agent(
         {
             "id": incident["id"],
