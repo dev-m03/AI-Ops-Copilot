@@ -1,6 +1,14 @@
 """AI Ops Copilot FastAPI application."""
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from core.logging_config import setup_logging
+
+# Initialise structured JSON logging before anything else runs
+setup_logging()
+logger = logging.getLogger(__name__)
 
 # Import routers
 from routes.health import router as health_router

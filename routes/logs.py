@@ -1,9 +1,13 @@
 """Log ingestion route."""
+import logging
+
 from fastapi import APIRouter, HTTPException
+
 from schemas.logs import LogCreate, LogResponse
 from services.log_service import ingest_log
 
 router = APIRouter(prefix="/logs", tags=["logs"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("", response_model=LogResponse)
@@ -13,5 +17,9 @@ def create_log(log: LogCreate):
         return ingest_log(log)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+    except Exception:
+        logger.exception(
+            "Unexpected error ingesting log",
+            extra={"context": {"service": log.service}},
+        )
         raise HTTPException(status_code=500, detail="Failed to ingest log")
