@@ -34,7 +34,7 @@ Deduplication
 import hashlib
 import logging
 import math
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from core.config import DEDUP_BUCKET_SECONDS, ERROR_THRESHOLD, ERROR_WINDOW_MINUTES
 from db.client import supabase
@@ -100,7 +100,7 @@ def ingest_log(log: LogCreate) -> LogResponse:
         "level":            log.level,
         "message":          log.message,
         "idempotency_key":  idem_key,
-        "created_at":       datetime.now(timezone.utc).isoformat(),
+        "created_at":       datetime.now(UTC).isoformat(),
     }).execute()
 
     inserted_log_id: str = log_res.data[0]["id"]
@@ -139,7 +139,7 @@ def _resolve_idempotency_key(log: LogCreate, project_id: str) -> str:
     if log.idempotency_key:
         return log.idempotency_key
 
-    now_epoch = datetime.now(timezone.utc).timestamp()
+    now_epoch = datetime.now(UTC).timestamp()
     bucket    = math.floor(now_epoch / DEDUP_BUCKET_SECONDS) * DEDUP_BUCKET_SECONDS
     raw       = f"{project_id}:{log.service}:{log.level}:{log.message}:{bucket}"
     return hashlib.sha256(raw.encode()).hexdigest()
@@ -152,7 +152,7 @@ def _find_duplicate_log(idem_key: str, window_minutes: int) -> dict | None:
     Fails open — a DB error here never blocks log ingestion.
     """
     since = (
-        datetime.now(timezone.utc) - timedelta(minutes=window_minutes)
+        datetime.now(UTC) - timedelta(minutes=window_minutes)
     ).isoformat()
 
     try:
@@ -192,7 +192,7 @@ def _check_and_create_incident(
     Returns (incident_id | None, was_created).
     """
     since = (
-        datetime.now(timezone.utc) - timedelta(minutes=window_minutes)
+        datetime.now(UTC) - timedelta(minutes=window_minutes)
     ).isoformat()
 
     # Count recent errors for this service
@@ -270,7 +270,7 @@ def _check_and_create_incident(
             "severity":         "high",
             "status":           "open",
             "occurrence_count": 1,
-            "created_at":       datetime.now(timezone.utc).isoformat(),
+            "created_at":       datetime.now(UTC).isoformat(),
         }).execute()
 
         new_id: str = incident_res.data[0]["id"]

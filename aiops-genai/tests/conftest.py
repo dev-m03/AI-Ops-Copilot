@@ -8,8 +8,8 @@ invoked from the repo root with:
 or from within the aiops-genai/ directory:
     pytest
 """
-import sys
 import os
+import sys
 
 # aiops-genai/ is the parent of this conftest's directory
 _GENAI_DIR = os.path.join(os.path.dirname(__file__), "..")

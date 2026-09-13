@@ -10,15 +10,11 @@ Covers:
 """
 
 import os
+
 os.environ["SUPABASE_URL"] = "https://fake.supabase.co"
 os.environ["SUPABASE_KEY"] = "fake-key"
 
-import hashlib
-import math
-from datetime import datetime, timezone
-from unittest.mock import MagicMock, call, patch
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 import services.log_service as svc
 from schemas.logs import LogCreate

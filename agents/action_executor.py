@@ -1,6 +1,7 @@
 """Safe action executor for incidents."""
 from services.notification_service import send_notification
 
+
 def execute_action(action: str, incident: dict, analysis: dict) -> bool:
     """Execute approved action safely."""
     if action == "alert":
@@ -34,4 +35,4 @@ Issue: {incident.get('summary')}
 Suggested Fixes: {', '.join(analysis.get('suggested_fixes', []))}
 """
     return send_notification(message)
-    
+

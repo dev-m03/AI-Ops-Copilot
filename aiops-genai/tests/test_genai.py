@@ -34,10 +34,10 @@ elif sys.path[0] != _GENAI_ROOT:
     sys.path.remove(_GENAI_ROOT)
     sys.path.insert(0, _GENAI_ROOT)
 
-import importlib
-import pytest
-from unittest.mock import MagicMock, patch
-from fastapi.testclient import TestClient
+import importlib  # noqa: E402
+from unittest.mock import MagicMock, patch  # noqa: E402
+
+from fastapi.testclient import TestClient  # noqa: E402
 
 os.environ.setdefault("AI_PROVIDER_KEY", "test-key")
 

@@ -1,6 +1,8 @@
 """Project schemas."""
-from pydantic import BaseModel
 from datetime import datetime
+
+from pydantic import BaseModel
+
 
 class ProjectCreate(BaseModel):
     """Project creation request."""

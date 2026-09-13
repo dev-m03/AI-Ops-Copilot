@@ -16,10 +16,10 @@ def create_log(log: LogCreate):
     try:
         return ingest_log(log)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception:
         logger.exception(
             "Unexpected error ingesting log",
             extra={"context": {"service": log.service}},
         )
-        raise HTTPException(status_code=500, detail="Failed to ingest log")
+        raise HTTPException(status_code=500, detail="Failed to ingest log") from None

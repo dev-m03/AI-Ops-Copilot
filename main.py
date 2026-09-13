@@ -5,17 +5,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from core.logging_config import setup_logging
+from routes.agents import router as agents_router
+from routes.health import router as health_router
+from routes.incidents import router as incidents_router
+from routes.logs import router as logs_router
+from routes.projects import router as projects_router
 
 # Initialise structured JSON logging before anything else runs
 setup_logging()
 logger = logging.getLogger(__name__)
-
-# Import routers
-from routes.health import router as health_router
-from routes.logs import router as logs_router
-from routes.projects import router as projects_router
-from routes.incidents import router as incidents_router
-from routes.agents import router as agents_router
 
 # Create app
 app = FastAPI(
