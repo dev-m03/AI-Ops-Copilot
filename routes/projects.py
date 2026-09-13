@@ -24,7 +24,7 @@ def create_new_project(
             "Unexpected error creating project",
             extra={"context": {"user_id": user_id}},
         )
-        raise HTTPException(status_code=500, detail="Failed to create project")
+        raise HTTPException(status_code=500, detail="Failed to create project") from None
 
 
 @router.get("", response_model=list[ProjectResponse])
@@ -37,7 +37,7 @@ def list_user_projects(user_id: str = Depends(get_current_user)):
             "Unexpected error listing projects",
             extra={"context": {"user_id": user_id}},
         )
-        raise HTTPException(status_code=500, detail="Failed to fetch projects")
+        raise HTTPException(status_code=500, detail="Failed to fetch projects") from None
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
@@ -48,11 +48,11 @@ def get_user_project(
     """Get specific project details."""
     try:
         return get_project(user_id, project_id)
-    except ValueError:
-        raise HTTPException(status_code=404, detail="Project not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Project not found") from exc
     except Exception:
         logger.exception(
             "Unexpected error fetching project",
             extra={"context": {"user_id": user_id, "project_id": project_id}},
         )
-        raise HTTPException(status_code=500, detail="Failed to fetch project")
+        raise HTTPException(status_code=500, detail="Failed to fetch project") from None

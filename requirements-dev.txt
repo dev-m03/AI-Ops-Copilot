@@ -9,4 +9,6 @@
 
 pytest>=8.1,<9
 pytest-mock>=3.14,<4
+pytest-cov>=5.0,<7      # coverage reports (pytest --cov)
+ruff>=0.4,<1            # linter — replaces flake8/isort/pyupgrade in one tool
 cryptography>=42,<44    # EC key-pair generation in auth tests

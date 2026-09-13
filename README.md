@@ -1,5 +1,7 @@
 # AI Ops Copilot — Developer Documentation
 
+[![CI](https://github.com/dev-m03/AI-Ops-Copilot/actions/workflows/ci.yml/badge.svg)](https://github.com/dev-m03/AI-Ops-Copilot/actions/workflows/ci.yml)
+
 AI Ops Copilot is a lightweight, AI-powered incident analysis platform that plugs into any backend with a single API key. It ingests logs, groups incidents, performs AI-driven root cause analysis, and triggers safe automated actions.
 
 ---

@@ -61,7 +61,7 @@ def get_current_user(authorization: str = Header(...)) -> str:
     try:
         jwks = _get_jwks()
     except RuntimeError as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     try:
         payload = jwt.decode(
@@ -70,10 +70,10 @@ def get_current_user(authorization: str = Header(...)) -> str:
             algorithms=["ES256"],
             audience="authenticated",
         )
-    except ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token has expired")
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    except ExpiredSignatureError as exc:
+        raise HTTPException(status_code=401, detail="Token has expired") from exc
+    except JWTError as exc:
+        raise HTTPException(status_code=401, detail="Invalid token") from exc
 
     user_id: str | None = payload.get("sub")
     if not user_id:

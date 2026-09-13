@@ -1,0 +1,56 @@
+# ruff.toml — Ruff linter configuration
+#
+# What is ruff?
+# ─────────────
+# Ruff is an extremely fast Python linter written in Rust.
+# It replaces/covers: flake8, isort, pyupgrade, and more — in one tool.
+# Running `ruff check .` scans every .py file and reports problems.
+# Running `ruff check --fix .` auto-fixes safe issues (unused imports, etc).
+#
+# This file is read automatically when you run `ruff check` in this directory.
+
+# Minimum Python version to target (affects which syntax rules apply)
+target-version = "py311"
+
+# Maximum allowed line length. 100 is a common real-world relaxation of PEP-8's 79.
+line-length = 100
+
+# Files/directories ruff should completely ignore
+exclude = [
+    "venv/",
+    ".venv/",
+    "__pycache__/",
+    "*.txt",          # plain text files — not Python
+    "migrations/",    # auto-generated DB migrations (if any)
+]
+
+[lint]
+# ── Rule sets to enable ──────────────────────────────────────────────────────
+# Each letter prefix is a "rule set":
+#   E  = pycodestyle errors  (spacing, indentation, etc.)
+#   W  = pycodestyle warnings
+#   F  = pyflakes             (undefined names, unused imports)
+#   I  = isort                (import ordering)
+#   UP = pyupgrade            (modernise Python syntax, e.g. Optional[X] → X | None)
+#   B  = flake8-bugbear       (common bugs and bad practices)
+#   S  = flake8-bandit        (basic security checks)
+select = ["E", "W", "F", "I", "UP", "B"]
+
+# ── Rules to ignore globally ─────────────────────────────────────────────────
+ignore = [
+    "E501",   # line-too-long — handled by formatter / black, not worth failing CI
+    "B008",   # do-not-perform-function-call-in-default-argument — FastAPI uses Depends() in defaults
+    "UP007",  # use X|Y instead of Optional[X] — leave for gradual migration
+]
+
+# ── Per-file rule overrides ───────────────────────────────────────────────────
+[lint.per-file-ignores]
+# Test files: allow assert statements and "magic" values in tests
+"tests/*"               = ["S", "B"]
+"aiops-genai/tests/*"   = ["S", "B"]
+# __init__.py files often re-export names without using them directly
+"*/__init__.py"         = ["F401"]
+
+[lint.isort]
+# Treat these as first-party packages when sorting imports
+known-first-party = ["db", "routes", "services", "agents", "schemas", "core", "utils"]

@@ -1,0 +1,165 @@
+# .github/workflows/ci.yml
+#
+# ════════════════════════════════════════════════════════════════════════════
+# What is this file?
+# ════════════════════════════════════════════════════════════════════════════
+# This is a GitHub Actions workflow. GitHub reads every file in
+# .github/workflows/ and treats each one as an automated pipeline.
+#
+# When does it run?
+# ─────────────────
+# The `on:` section below says: run whenever someone pushes to `main` OR
+# opens / updates a pull request targeting `main`.
+#
+# What does it do?
+# ────────────────
+# It spins up a temporary Linux machine in GitHub's cloud, installs Python,
+# installs our dependencies, then runs two jobs in parallel:
+#
+#   1. api-service  — lints + tests the main FastAPI backend (root folder)
+#   2. genai-service — lints + tests the aiops-genai microservice
+#
+# If either job fails (lint error OR test failure), the entire CI run turns
+# red and blocks the PR from merging.
+# ════════════════════════════════════════════════════════════════════════════
+
+name: CI   # This label appears on the GitHub Actions tab and in the badge
+
+# ── Trigger conditions ────────────────────────────────────────────────────────
+on:
+  push:
+    branches: [main]          # run on every direct push to main
+  pull_request:
+    branches: [main]          # run on every PR targeting main
+
+# ── Jobs ─────────────────────────────────────────────────────────────────────
+# Each job is an independent runner. They run in parallel by default.
+jobs:
+
+  # ┌─────────────────────────────────────────────────────────────────────────┐
+  # │  JOB 1 — Main API service (root of the repo)                           │
+  # └─────────────────────────────────────────────────────────────────────────┘
+  api-service:
+    name: "API Service — lint + test"
+
+    # `runs-on` picks the machine type GitHub provides for free.
+    # ubuntu-latest is the standard choice — reliable, fast, free.
+    runs-on: ubuntu-latest
+
+    # `defaults` means every `run:` step below uses this working directory
+    # unless otherwise specified.
+    defaults:
+      run:
+        working-directory: .   # repo root = AI-Ops-Copilot/
+
+    steps:
+      # ── Step 1: Check out the code ────────────────────────────────────────
+      # `actions/checkout` is a pre-built action by GitHub that clones your
+      # repo onto the runner machine. Without this, there's no code to work with.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── Step 2: Install Python ────────────────────────────────────────────
+      # `actions/setup-python` installs the version we specify.
+      # We pin 3.11 to match our `target-version` in ruff.toml.
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          # `cache: pip` tells GitHub to reuse the pip download cache between
+          # runs. This makes subsequent CI runs significantly faster.
+          cache: "pip"
+
+      # ── Step 3: Install production + dev dependencies ─────────────────────
+      # We install BOTH:
+      #   requirements.txt     → the real app dependencies (fastapi, supabase…)
+      #   requirements-dev.txt → test-only tools (pytest, ruff, cryptography…)
+      #
+      # Why separate files?  So that when you deploy to production (Render,
+      # Docker, etc.) you only install requirements.txt — no test bloat.
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      # ── Step 4: Lint with ruff ────────────────────────────────────────────
+      # `ruff check .` scans every Python file under the current directory.
+      # If it finds any violation defined in ruff.toml, it prints it and
+      # exits with a non-zero code → GitHub marks this step as FAILED.
+      #
+      # The `--output-format=github` flag makes ruff print errors in the
+      # exact format GitHub's UI understands, so errors appear as inline
+      # annotations directly in the PR diff view.
+      - name: Lint with ruff
+        run: ruff check . --output-format=github
+
+      # ── Step 5: Run tests with coverage ───────────────────────────────────
+      # `pytest` reads pytest.ini which already has `--cov` flags baked in,
+      # so just running `pytest tests/` is enough to get coverage output.
+      #
+      # The `--cov-fail-under=60` flag makes the step FAIL if coverage drops
+      # below 60%. This is a safety net — you can raise it over time as your
+      # test suite grows.
+      - name: Run tests with coverage
+        run: pytest tests/ --cov-fail-under=60
+        env:
+          # These env vars are needed by imports in db/auth.py and db/client.py
+          # at module load time. They don't need to be real — tests mock the DB.
+          SUPABASE_URL: https://fake.supabase.co
+          SUPABASE_KEY: fake-key
+          AI_PROVIDER_KEY: fake-key
+
+      # ── Step 6 (optional): Upload coverage report as a CI artifact ────────
+      # After the tests run, coverage.xml is uploaded so you can download it
+      # from the GitHub Actions UI and inspect line-by-line coverage.
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()   # upload even if tests failed — useful for debugging
+        with:
+          name: api-coverage
+          path: coverage.xml
+
+  # ┌─────────────────────────────────────────────────────────────────────────┐
+  # │  JOB 2 — aiops-genai microservice                                      │
+  # └─────────────────────────────────────────────────────────────────────────┘
+  genai-service:
+    name: "GenAI Service — lint + test"
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        # All steps for this job run from the aiops-genai/ subdirectory.
+        working-directory: aiops-genai
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      # Lint only the files inside aiops-genai/  (`.` = current working dir)
+      - name: Lint with ruff
+        run: ruff check . --output-format=github --config ../ruff.toml
+
+      - name: Run tests with coverage
+        run: pytest tests/ --cov-fail-under=60
+        env:
+          AI_PROVIDER_KEY: fake-key
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: genai-coverage
+          path: aiops-genai/coverage.xml
