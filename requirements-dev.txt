@@ -1,0 +1,12 @@
+# Development / test-only dependencies — do NOT add to requirements.txt
+#
+# Install into the existing venv (which already has httpx from supabase):
+#   pip install -r requirements-dev.txt
+#
+# httpx is NOT listed here because supabase==2.0.2 already pins it
+# to 0.28.x in the production requirements — re-listing it causes
+# pip's resolver to report a false conflict.
+
+pytest>=8.1,<9
+pytest-mock>=3.14,<4
+cryptography>=42,<44    # EC key-pair generation in auth tests

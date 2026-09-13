@@ -1,29 +1,31 @@
 """
-Tests for IDOR prevention in POST /agents/analyze/{incident_id}.
+IDOR-prevention tests for POST /agents/analyze/{incident_id}  (routes/agents.py).
 
-Confirms:
-- User A can analyze their own incident (200)
-- User A cannot analyze User B's incident (404, not 403)
-- A completely non-existent incident returns 404
+Confirms that:
+- A valid owner gets a 200 with analysis + decision fields present.
+- User A cannot read User B's incident  → 404 (not 403 — 403 leaks existence).
+- A completely non-existent incident_id → 404.
 """
-
+# ── Env setup ─────────────────────────────────────────────────────────────────
 import os
-os.environ["SUPABASE_URL"] = "https://fake.supabase.co"
+os.environ.setdefault("SUPABASE_URL", "https://fake.supabase.co")
+os.environ.setdefault("SUPABASE_KEY", "fake-key")
 
 from unittest.mock import MagicMock, patch
-from fastapi.testclient import TestClient
+
 from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from db.auth import get_current_user
 import routes.agents as agents_module
 from routes.agents import router
 
-# ── minimal app ───────────────────────────────────────────────────────────────
-app = FastAPI()
-app.include_router(router)
-client = TestClient(app, raise_server_exceptions=False)
+# ── Minimal test app ──────────────────────────────────────────────────────────
+_app = FastAPI()
+_app.include_router(router)
+_client = TestClient(_app, raise_server_exceptions=False)
 
-# ── shared fixtures ───────────────────────────────────────────────────────────
+# ── Shared fixtures ───────────────────────────────────────────────────────────
 USER_A = "user-A-uuid"
 USER_B = "user-B-uuid"
 
@@ -37,14 +39,32 @@ INCIDENT = {
 
 PROJECT_A = {"id": "project-A"}
 
+MOCK_ANALYSIS = {
+    "root_cause": "DB connection pool exhausted",
+    "confidence": 0.9,
+    "severity": "high",
+    "suggested_fixes": ["Increase pool size", "Add connection retry"],
+    "needs_human": False,
+}
+
+MOCK_DECISION = {
+    "incident_id": INCIDENT["id"],
+    "action": "alert",
+    "executed": True,
+    "message": "Action 'alert' executed",
+}
+
+
+# ── Supabase mock builder ─────────────────────────────────────────────────────
 
 def _make_supabase_mock(incident_data, project_data):
     """
-    Build a Supabase mock that returns different data for the two sequential
-    .table() calls inside analyze_and_decide:
-      call 1 → incidents table  → incident_data
-      call 2 → projects table   → project_data
+    Build a Supabase client mock satisfying the two sequential .table() calls
+    that analyze_and_decide() makes:
+      call 1 → incidents table
+      call 2 → projects table
     """
+
     def _chain(data):
         m = MagicMock()
         m.select.return_value = m
@@ -58,71 +78,71 @@ def _make_supabase_mock(incident_data, project_data):
     return root
 
 
-# ── tests ─────────────────────────────────────────────────────────────────────
+# ── Tests ─────────────────────────────────────────────────────────────────────
 
-def test_owner_can_analyze_own_incident():
-    """User A analyzing their own incident → 200."""
-    mock_analysis = {
-        "root_cause": "DB down",
-        "confidence": 0.9,
-        "severity": "high",
-        "suggested_fixes": ["Restart DB"],
-        "needs_human": False,
-    }
-    mock_decision = {"action": "restart", "automated": True}
-
-    # Override auth dependency so no real JWT verification happens
-    app.dependency_overrides[get_current_user] = lambda: USER_A
-
-    with (
-        patch.object(agents_module, "supabase", _make_supabase_mock(INCIDENT, PROJECT_A)),
-        patch("routes.agents.analyze_incident", return_value=mock_analysis),
-        patch("routes.agents.run_agent", return_value=mock_decision),
-    ):
-        res = client.post(
-            f"/agents/analyze/{INCIDENT['id']}",
-            headers={"Authorization": "Bearer fake"},
-        )
-
-    app.dependency_overrides.clear()
+def test_owner_gets_200_with_analysis_and_decision():
+    """Valid owner requesting their own incident → 200 with all expected fields."""
+    _app.dependency_overrides[get_current_user] = lambda: USER_A
+    try:
+        with (
+            patch.object(agents_module, "supabase", _make_supabase_mock(INCIDENT, PROJECT_A)),
+            patch("routes.agents.analyze_incident", return_value=MOCK_ANALYSIS),
+            patch("routes.agents.run_agent", return_value=MOCK_DECISION),
+        ):
+            res = _client.post(
+                f"/agents/analyze/{INCIDENT['id']}",
+                headers={"Authorization": "Bearer fake"},
+            )
+    finally:
+        _app.dependency_overrides.clear()
 
     assert res.status_code == 200
     data = res.json()
     assert data["incident_id"] == INCIDENT["id"]
-    assert data["analysis"]["root_cause"] == "DB down"
+    # analysis fields
+    assert data["analysis"]["root_cause"] == MOCK_ANALYSIS["root_cause"]
+    assert data["analysis"]["confidence"] == MOCK_ANALYSIS["confidence"]
+    assert data["analysis"]["severity"] == MOCK_ANALYSIS["severity"]
+    # decision field present
+    assert "decision" in data
+    assert data["decision"]["action"] == "alert"
 
 
 def test_non_owner_gets_404_not_403():
     """
-    User B tries to analyze User A's incident.
-    Ownership check (project.user_id != USER_B) fails → must be 404,
-    never 403 (which would leak that the incident exists).
+    User B tries to access User A's incident.
+    The project ownership check fails (project not found for USER_B).
+    Must return 404 — never 403, which would reveal the incident exists.
     """
-    app.dependency_overrides[get_current_user] = lambda: USER_B
-
-    # Incident exists but project lookup returns None (wrong user_id)
-    with patch.object(agents_module, "supabase", _make_supabase_mock(INCIDENT, None)):
-        res = client.post(
-            f"/agents/analyze/{INCIDENT['id']}",
-            headers={"Authorization": "Bearer fake"},
-        )
-
-    app.dependency_overrides.clear()
+    _app.dependency_overrides[get_current_user] = lambda: USER_B
+    try:
+        # Incident is found, but the project-level ownership check returns None
+        with patch.object(
+            agents_module, "supabase", _make_supabase_mock(INCIDENT, None)
+        ):
+            res = _client.post(
+                f"/agents/analyze/{INCIDENT['id']}",
+                headers={"Authorization": "Bearer fake"},
+            )
+    finally:
+        _app.dependency_overrides.clear()
 
     assert res.status_code == 404
-    assert res.status_code != 403   # 403 leaks existence — must not happen
+    assert res.status_code != 403, "403 leaks incident existence — must never be returned"
 
 
 def test_nonexistent_incident_returns_404():
-    """Incident doesn't exist at all → 404."""
-    app.dependency_overrides[get_current_user] = lambda: USER_A
-
-    with patch.object(agents_module, "supabase", _make_supabase_mock(None, None)):
-        res = client.post(
-            "/agents/analyze/does-not-exist",
-            headers={"Authorization": "Bearer fake"},
-        )
-
-    app.dependency_overrides.clear()
+    """Incident_id that doesn't exist at all → 404."""
+    _app.dependency_overrides[get_current_user] = lambda: USER_A
+    try:
+        with patch.object(
+            agents_module, "supabase", _make_supabase_mock(None, None)
+        ):
+            res = _client.post(
+                "/agents/analyze/does-not-exist",
+                headers={"Authorization": "Bearer fake"},
+            )
+    finally:
+        _app.dependency_overrides.clear()
 
     assert res.status_code == 404
