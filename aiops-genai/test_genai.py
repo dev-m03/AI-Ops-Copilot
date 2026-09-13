@@ -8,7 +8,6 @@ Run from the aiops-genai/ folder:
 import json
 from unittest.mock import MagicMock, patch
 
-import pytest
 from fastapi.testclient import TestClient
 
 from main import app

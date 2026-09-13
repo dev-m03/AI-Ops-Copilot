@@ -15,12 +15,12 @@ run_agent wraps decide_action — we verify it:
   • attempts execution for "alert" / "notify" actions
   • sets executed=True on success, records message on failure
 """
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
-from agents.policies import decide_action
 from agents.decision_engine import run_agent
-
+from agents.policies import decide_action
 
 # ── Table-driven tests for decide_action ─────────────────────────────────────
 

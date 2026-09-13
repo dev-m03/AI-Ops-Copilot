@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends
+
 from db.auth import get_current_user
 from db.client import supabase
 

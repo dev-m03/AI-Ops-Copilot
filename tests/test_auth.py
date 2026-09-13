@@ -12,6 +12,7 @@ Covers
 """
 # ── Env setup — MUST precede ALL project imports ─────────────────────────────
 import os
+
 os.environ.setdefault("SUPABASE_URL", "https://fake.supabase.co")
 os.environ.setdefault("SUPABASE_KEY", "fake-key")
 
@@ -33,7 +34,6 @@ from jose import jwt as jose_jwt
 
 # ── Project imports (after env is set) ───────────────────────────────────────
 import db.auth as auth_module
-
 
 # ── Key material — generated once per test-session ───────────────────────────
 

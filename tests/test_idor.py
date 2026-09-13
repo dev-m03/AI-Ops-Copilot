@@ -8,6 +8,7 @@ Confirms that:
 """
 # ── Env setup ─────────────────────────────────────────────────────────────────
 import os
+
 os.environ.setdefault("SUPABASE_URL", "https://fake.supabase.co")
 os.environ.setdefault("SUPABASE_KEY", "fake-key")
 
@@ -16,8 +17,8 @@ from unittest.mock import MagicMock, patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from db.auth import get_current_user
 import routes.agents as agents_module
+from db.auth import get_current_user
 from routes.agents import router
 
 # ── Minimal test app ──────────────────────────────────────────────────────────

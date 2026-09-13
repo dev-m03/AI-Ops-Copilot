@@ -16,16 +16,14 @@ Covers
 """
 # ── Env setup — MUST precede ALL project imports ─────────────────────────────
 import os
+
 os.environ.setdefault("SUPABASE_URL", "https://fake.supabase.co")
 os.environ.setdefault("SUPABASE_KEY", "fake-key")
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 import services.log_service as svc
 from schemas.logs import LogCreate
-
 
 # ── Shared fixtures ───────────────────────────────────────────────────────────
 
