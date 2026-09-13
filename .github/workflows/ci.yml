@@ -108,6 +108,7 @@ jobs:
           # at module load time. They don't need to be real — tests mock the DB.
           SUPABASE_URL: https://fake.supabase.co
           SUPABASE_KEY: fake-key
+          SUPABASE_SERVICE_KEY: fake-service-key   # db/client.py reads this key
           AI_PROVIDER_KEY: fake-key
 
       # ── Step 6 (optional): Upload coverage report as a CI artifact ────────
