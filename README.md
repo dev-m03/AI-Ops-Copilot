@@ -4,6 +4,29 @@
 
 AI Ops Copilot is a lightweight, AI-powered incident analysis platform that plugs into any backend with a single API key. It ingests logs, groups incidents, performs AI-driven root cause analysis, and triggers safe automated actions.
 
+## Architecture
+
+```mermaid
+flowchart LR
+    A[Client App] -- "POST /logs\n(api_key, service, level, message)" --> B[aiops-api]
+    B --> C{Threshold\ncrossed?}
+    C -- No --> D[(Supabase\nlogs table)]
+    C -- Yes --> E[Incident created]
+    E --> D
+    E --> F[(Supabase\nincidents table)]
+
+    G[User] -- "JWT (Supabase Auth)" --> H["POST /agents/analyze/{incident_id}"]
+    H --> B
+    B -- "ownership check\n(404 if not owner)" --> B
+    B -- "POST /analyze\n(incident_id, context)" --> I[aiops-genai]
+    I -- "tries flash-lite -> flash -> pro" --> J[Gemini API]
+    J -- "structured JSON" --> I
+    I -- "AnalyzeResponse\n(or safe fallback)" --> B
+    B --> K[(Supabase\nincident_analysis)]
+    B --> L[Decision Engine]
+    L --> M[Action Executor\ne.g. notify]
+```
+
 ---
 
 ## Getting Started
