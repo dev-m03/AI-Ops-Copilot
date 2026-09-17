@@ -6,28 +6,28 @@ AI Ops Copilot is a lightweight, AI-powered incident analysis platform that plug
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### 1. Create an Account
 
-* Visit the AI Ops Copilot website : www.aiopsco.vercel.app
+* Visit the AI Ops Copilot website: www.aiopsco.vercel.app
 * Sign up using email & password
 * Log in to access your dashboard
 
 ---
 
-## 📦 Create a Project & API Key
+## Create a Project & API Key
 
 1. Go to **Dashboard**
 2. Click **Create Project**
 3. Enter a project name
 4. Copy the generated **API Key**
 
-> 🔐 Keep this key secret. It is write-only and scoped to your project.
+> Keep this key secret. It is write-only and scoped to your project.
 
 ---
 
-## 🔑 Environment Variables
+## Environment Variables
 
 ```env
 AIOPS_API_KEY=ops_xxxxxxxxx
@@ -36,7 +36,7 @@ AIOPS_ENDPOINT=https://aiops-api.onrender.com/logs
 
 ---
 
-## 📡 Log Ingestion API
+## Log Ingestion API
 
 ### Endpoint
 
@@ -47,35 +47,52 @@ POST https://aiops-api.onrender.com/logs
 ### Headers
 
 ```
-X-API-Key: <your_api_key>
 Content-Type: application/json
 ```
+
+> Note: unlike most APIs, your API key is **not** sent as a header here — it goes in the request body (see below). This endpoint doesn't require a login token either; the `api_key` alone identifies your project.
 
 ### Request Body
 
 ```json
 {
+  "api_key": "ops_xxxxxxxxx",
   "service": "auth-service",
   "level": "ERROR",
   "message": "Database connection timeout",
-  "metadata": {
-    "path": "/login",
-    "method": "POST"
-  }
+  "idempotency_key": null
 }
 ```
+
+| Field | Required | Description |
+|---|---|---|
+| `api_key` | Yes | Your project's API key |
+| `service` | Yes | Name of the service/app this log came from |
+| `level` | Yes | One of `ERROR`, `WARN`, `INFO`, `DEBUG` |
+| `message` | Yes | The log/error message |
+| `idempotency_key` | No | Supply your own to control deduplication explicitly, or omit it and one is auto-computed from `(project_id, service, level, message)` within a rolling time window — identical repeats within that window are treated as the same log entry and won't create duplicate rows or double-count toward incident thresholds |
 
 ### Response
 
 ```json
 {
-  "status": "ok"
+  "id": "b4307efb-b758-4efe-88d0-e982c6c2...",
+  "project_id": "a4397fe4-75dd-4f0c-8e08-517e...",
+  "incident_created": false,
+  "incident_id": null,
+  "deduplicated": false
 }
 ```
 
+| Field | Description |
+|---|---|
+| `incident_created` | `true` if this log crossed the error threshold and opened a new incident |
+| `incident_id` | Set whenever this log is associated with an incident (new or already-open) |
+| `deduplicated` | `true` if this exact log was treated as a repeat and no new row was written |
+
 ---
 
-## ⚙️ Backend Integration Examples
+## Backend Integration Examples
 
 ### FastAPI (Python)
 
@@ -92,22 +109,16 @@ async def aiops_logger(request: Request, call_next):
     except Exception as e:
         requests.post(
             "https://aiops-api.onrender.com/logs",
-            headers={"X-API-Key": os.getenv("AIOPS_API_KEY")},
             json={
+                "api_key": os.getenv("AIOPS_API_KEY"),
                 "service": "fastapi-app",
                 "level": "ERROR",
                 "message": str(e),
-                "metadata": {
-                    "path": request.url.path,
-                    "method": request.method
-                }
             },
-            timeout=2
+            timeout=5
         )
         raise
 ```
-
----
 
 ### Spring Boot (Java)
 
@@ -122,17 +133,13 @@ public class GlobalExceptionHandler {
   public void handle(Exception ex, HttpServletRequest req) {
     RestTemplate rest = new RestTemplate();
     HttpHeaders headers = new HttpHeaders();
-    headers.set("X-API-Key", apiKey);
     headers.setContentType(MediaType.APPLICATION_JSON);
 
     Map<String, Object> body = Map.of(
+      "api_key", apiKey,
       "service", "springboot-app",
       "level", "ERROR",
-      "message", ex.getMessage(),
-      "metadata", Map.of(
-        "path", req.getRequestURI(),
-        "method", req.getMethod()
-      )
+      "message", ex.getMessage()
     );
 
     rest.postForEntity(
@@ -144,8 +151,6 @@ public class GlobalExceptionHandler {
 }
 ```
 
----
-
 ### Node.js (Express)
 
 ```js
@@ -153,73 +158,69 @@ import axios from "axios";
 
 app.use(async (err, req, res, next) => {
   await axios.post("https://aiops-api.onrender.com/logs", {
+    api_key: process.env.AIOPS_API_KEY,
     service: "node-app",
     level: "ERROR",
     message: err.message,
-    metadata: {
-      path: req.path,
-      method: req.method
-    }
   }, {
-    headers: {
-      "X-API-Key": process.env.AIOPS_API_KEY
-    },
-    timeout: 2000
+    timeout: 5000
   });
 
   res.status(500).send("Internal Server Error");
 });
 ```
 
+> **Tip:** if your error messages tend to repeat verbatim (e.g. the same exception text every time), consider appending something that varies per occurrence — a timestamp or request ID — to `message`. The API's deduplication treats identical messages within the same time window as one log entry, which is correct for retry storms but means truly repeated errors from the same bug won't individually count toward the incident threshold unless the text differs.
+
 ---
 
-## 🧠 Incident Lifecycle
+## Incident Lifecycle
 
 ```
 Logs → Incidents → AI Analysis → Agent Decision
 ```
 
-* Logs are grouped into incidents automatically
-* AI performs root cause analysis
-* A decision engine triggers safe actions
+* Logs are grouped into incidents automatically once a service crosses a configurable error threshold within a time window (detection is threshold-based, not AI-driven)
+* AI performs root cause analysis on the incident *after* it's created
+* A decision engine triggers safe actions based on the analysis
 * Results are visible in the dashboard
 
 ---
 
-## 🤖 AI Root Cause Analysis
+## AI Root Cause Analysis
 
 AI Ops Copilot uses an LLM (Gemini) with:
 
-* Strict JSON output
-* Confidence scoring
+* Strict JSON output, parsed into a typed response
+* A multi-model fallback chain, so a single model outage doesn't take analysis down
+* Confidence scoring (self-reported by the model, not a calibrated statistical measure)
 * Severity classification
 * Human-in-the-loop safeguards
 
-If analysis is unreliable, the system **fails safely** and flags for review.
+If analysis is unreliable or every model in the fallback chain fails, the system fails safely: it returns a clearly-marked low-confidence result and flags the incident for human review, rather than guessing.
 
 ---
 
-## 🗂 Incident Memory (RAG)
+## Incident Memory (RAG)
 
-The `incident_memory` table is reserved for **validated incidents only**.
+The `incident_memory` table is reserved for validated incidents only.
 
-* AI output is **not** stored blindly
+* AI output is not stored blindly
 * Memory is written after human confirmation
 * Enables future similarity search (RAG)
 
 ---
 
-## 🔐 Security Model
+## Security Model
 
-* API keys are **project-scoped**
-* No user JWTs for log ingestion
-* Write-only access
+* API keys are project-scoped and write-only, used only for log ingestion
+* All other endpoints (projects, incidents, agent analysis) require a Supabase-issued JWT, verified against Supabase's JWKS endpoint (not a shared secret) — forged or tampered tokens are rejected
+* Every resource lookup is scoped to the authenticated user's own projects; requests for another user's data return 404 rather than the data itself
 * Keys are revocable
-* All requests are authenticated
 
 ---
 
-## 📊 Dashboard Features
+## Dashboard Features
 
 * Project management
 * API key generation
@@ -229,19 +230,19 @@ The `incident_memory` table is reserved for **validated incidents only**.
 
 ---
 
-## 🧪 Testing Without Production Traffic
+## Testing Without Production Traffic
 
 You can test ingestion using:
 
-* Swagger
+* Swagger (`/docs` on the live API)
 * Postman
 * Simple scripts (curl / requests / axios)
 
-Each request creates an incident visible in the dashboard.
+Each request creates an incident visible in the dashboard once it crosses the error threshold.
 
 ---
 
-## 🏁 Summary
+## Summary
 
 AI Ops Copilot is designed to:
 
@@ -253,5 +254,3 @@ AI Ops Copilot is designed to:
 ---
 
 For issues or contributions, refer to the GitHub repository.
-
-Happy shipping 🚀
