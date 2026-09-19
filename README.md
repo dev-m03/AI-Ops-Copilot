@@ -276,5 +276,5 @@ AI Ops Copilot is designed to:
 
 ---
 
-For issues or contributions, refer to the GitHub repository.
-Built from scratch by @dev-m03
+For issues or contributions, refer to this GitHub repository.
+Built from scratch by @dev-m03.
